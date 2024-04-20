@@ -147,7 +147,7 @@ int main() {
   // Array of bodies
   std::vector<Body*> bodies;
   
-  generate_random_bodies(1000, &bodies);
+  generate_random_bodies(10000, &bodies);
   //bodies = {
   //  new Body(sf::Vector2f(100, 100), 64),
   //  new Body(sf::Vector2f(200, 100), 64),
@@ -193,10 +193,6 @@ int main() {
         
         // If first and second collided:
         if (first->check_for_collision(second)) {
-          // Set collided status on both bodies
-          first->is_collided = true;
-          second->is_collided = true;
-          
           // Check if collision group with either of bodies already exists
           // Iterate over all collision groups
           bool grp_exists = false;
@@ -206,6 +202,12 @@ int main() {
             for (size_t elem_i = 0; elem_i < collision_groups[grp_i].size(); elem_i++) {
               first_in_grp = (collision_groups[grp_i][elem_i]->id == first->id) || first_in_grp;
               second_in_grp = (collision_groups[grp_i][elem_i]->id == second->id) || second_in_grp;
+            }
+
+            // WORKAROUND
+            if ((first->is_collided) || (second->is_collided)) {
+              grp_exists = true;
+              break;
             }
 
             // If one of bodies is in a group, also add missing body there
@@ -226,6 +228,10 @@ int main() {
           if (!grp_exists) {
             collision_groups.push_back(std::vector<Body*>{first, second});
           }
+          
+          // Set collided status on both bodies
+          first->is_collided = true;
+          second->is_collided = true;
         }
         
         // Apply gravitational forces to both bodies
