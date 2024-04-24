@@ -1,8 +1,10 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System/Vector2.hpp>
+#include <cmath>
 #include <iostream>
 #include <random>
 
+const float pi = std::acos(-1);
 
 /* TODO
 * Sometimes one body can end up in several collision groups simultaneously,
@@ -46,8 +48,6 @@ public:
 
     this->shape = sf::CircleShape(this->radius);
     this->shape.setPosition(this->position);
-
-
   }
   
   void draw(sf::RenderWindow* window) {
@@ -77,8 +77,8 @@ public:
     sf::Vector2f direction = sf::Vector2f(dx / distance, dy / distance);
     
     // Apply forces
-    this->velocity -= direction * force;
-    other->velocity += direction * force;
+    this->velocity -= direction * force / this->mass;
+    other->velocity += direction * force / other->mass;
   }
 
   bool check_for_collision(Body* other) {
@@ -135,6 +135,31 @@ void generate_random_bodies(int n, std::vector<Body*>* bodies) {
 }
 
 
+void complicated_random_bodies(int n, std::vector<Body*>* bodies, int min_range, int max_range, int min_mass, int max_mass, float speed) {
+  // Generate ring of bodies rotating clockwise
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<> rnd_r(min_range, max_range);
+  std::uniform_real_distribution<> rnd_fi(0, pi * 2);
+  std::uniform_real_distribution<> rnd_m(min_mass, max_mass);
+  
+  for (int i = 0; i < n; i++) {
+    float r = rnd_r(gen);
+    float fi = rnd_fi(gen);
+    float x = std::cos(fi) * r;
+    float y = std::sin(fi) * r * -1;
+
+    float r_percent = (r - min_range) / (max_range - min_range) + 0.5f;
+    float vel_x = std::sin(fi) * std::sqrt(speed * r_percent);
+    float vel_y = std::cos(fi) * std::sqrt(speed * r_percent);
+
+    Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), sf::Vector2f(vel_x, vel_y));
+
+    bodies->push_back(body);
+  }
+}
+
+
 int main() {
   // Create a window
   sf::RenderWindow window(sf::VideoMode(800, 600), "nbody");
@@ -147,7 +172,8 @@ int main() {
   // Array of bodies
   std::vector<Body*> bodies;
   
-  generate_random_bodies(10000, &bodies);
+  complicated_random_bodies(10000, &bodies, 100, 500, 1, 2, 0.01f);
+  bodies.push_back(new Body(sf::Vector2f(0, 0), 10000));
   //bodies = {
   //  new Body(sf::Vector2f(100, 100), 64),
   //  new Body(sf::Vector2f(200, 100), 64),
@@ -155,7 +181,7 @@ int main() {
   //  new Body(sf::Vector2f(200, 300), 64),
   //};
   
-  Camera camera(bodies[0]);
+  Camera camera(bodies[bodies.size() - 1]);
 
   std::vector<Body*> new_bodies;
   std::vector<std::vector<Body*>> collision_groups;
@@ -264,16 +290,16 @@ int main() {
         for (size_t j = 0; j < collision_groups[i].size(); j++) {
           Body* body = collision_groups[i][j];
           mass_sum += body->mass;
-          velocity_sum += body->velocity;
-          position_sum += body->position;
+          velocity_sum += body->velocity * body->mass;
+          position_sum += body->position * body->mass;
           switch_camera = (camera.tracked_body->id == body->id || switch_camera);
           // Get rid of this body; we won't need it anymore
           delete body;
         }
         
         // Construct a new body based on accumulated values
-        Body* new_body = new Body(position_sum / (float)grp_size,
-                                  mass_sum / grp_size,
+        Body* new_body = new Body(position_sum / mass_sum,
+                                  mass_sum,
                                   velocity_sum / mass_sum);
         // If any of bodies in group had camera focus, switch focus to newly created body
         if (switch_camera) {
