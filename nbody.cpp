@@ -1,20 +1,10 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System/Vector2.hpp>
+#include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <random>
 
 const float pi = std::acos(-1);
-
-/* TODO
-* Sometimes one body can end up in several collision groups simultaneously,
-* causing it to be deleted twice and crashing program with double free()
-*
-* It is unlikely to happen with low body count, 
-* but proabbility approaches 100% the more bodies you add.
-*
-* To prevent this the whole collision logic needs to be reworked
-*/
 
 
 sf::Vector2f normalize(const sf::Vector2f& vector) {
@@ -34,7 +24,6 @@ public:
   float mass;
   sf::Vector2f position;
   sf::Vector2f velocity;
-  bool is_tracked = false;
   bool is_collided = false;
   sf::CircleShape shape;
 
@@ -166,13 +155,13 @@ int main() {
   sf::Clock clock;
   
   // Calculate fps
-  const float fps = 60.0f;
+  const float fps = 120.0f;
   sf::Time spf = sf::seconds(1.0f / fps);
 
   // Array of bodies
   std::vector<Body*> bodies;
   
-  complicated_random_bodies(10000, &bodies, 100, 500, 1, 2, 0.01f);
+  complicated_random_bodies(1000, &bodies, 100, 500, 1, 2, 0.01f);
   bodies.push_back(new Body(sf::Vector2f(0, 0), 10000));
   //bodies = {
   //  new Body(sf::Vector2f(100, 100), 64),
@@ -184,7 +173,7 @@ int main() {
   Camera camera(bodies[bodies.size() - 1]);
 
   std::vector<Body*> new_bodies;
-  std::vector<std::vector<Body*>> collision_groups;
+  std::vector<std::pair<Body*, Body*>> collision_groups;
   
   // Main loop
   while (window.isOpen()) {
@@ -212,104 +201,45 @@ int main() {
       Body* first = bodies[i];
       for (size_t j = i + 1; j < bodies.size(); j++) {
         Body* second = bodies[j];
-
-        // This collision check algorithm is terrible and slow
-        // but I can't think of a better way of handling multi-body collisions
-        // collisions don't happen often anyway so it should be *good enough*
         
         // If first and second collided:
-        if (first->check_for_collision(second)) {
-          // Check if collision group with either of bodies already exists
-          // Iterate over all collision groups
-          bool grp_exists = false;
-          for (size_t grp_i = 0; grp_i < collision_groups.size(); grp_i++) {
-            // Iterate over all bodies in this collision group
-            bool first_in_grp = false, second_in_grp = false;
-            for (size_t elem_i = 0; elem_i < collision_groups[grp_i].size(); elem_i++) {
-              first_in_grp = (collision_groups[grp_i][elem_i]->id == first->id) || first_in_grp;
-              second_in_grp = (collision_groups[grp_i][elem_i]->id == second->id) || second_in_grp;
-            }
-
-            // WORKAROUND
-            if ((first->is_collided) || (second->is_collided)) {
-              grp_exists = true;
-              break;
-            }
-
-            // If one of bodies is in a group, also add missing body there
-            // and exit the for loop early
-            if (first_in_grp && !second_in_grp) {
-              collision_groups[grp_i].push_back(second);
-              grp_exists = true;
-              break;
-            }
-            else if (!first_in_grp && second_in_grp) {
-              collision_groups[grp_i].push_back(first);
-              grp_exists = true;
-              break;
-            }
-          }
-          // If collision group with either of bodies doesn't exist,
-          // create it and add 2 colliding bodies there
-          if (!grp_exists) {
-            collision_groups.push_back(std::vector<Body*>{first, second});
-          }
-          
-          // Set collided status on both bodies
+        if (!first->is_collided && !second->is_collided && first->check_for_collision(second)) {
           first->is_collided = true;
           second->is_collided = true;
+
+          collision_groups.push_back(std::pair<Body*, Body*>(first, second));
         }
         
         // Apply gravitational forces to both bodies
         first->do_gravity(second);
       }
-      
-      // When we are done processing all 'second' combinations for 'first',
-      // check if 'first' collided with anything. If it didn't, add it to new_bodies
+
       if (!first->is_collided) {
         new_bodies.push_back(first);
       }
     }
-    // Handle last body (see NOTE in the loop above)
-    if (!bodies[bodies.size() - 1]->is_collided) {
-      new_bodies.push_back(bodies[bodies.size() - 1]);
+    if (!bodies.back()->is_collided) {
+      new_bodies.push_back(bodies.back());
     }
-    
-    // Process all collision groups
-    // Collision group is a list of collided objects, 
-    // they need to be merged into one
-    for (size_t i = 0; i < collision_groups.size(); i++) {
-      unsigned int grp_size = collision_groups[i].size();
-      if (grp_size > 0) {
-        bool switch_camera = false;
-        float mass_sum = 0;
-        sf::Vector2f velocity_sum(0, 0);
-        sf::Vector2f position_sum(0, 0);
 
-        // Iterate over bodies in a group and accumulate their characteristics in varaibles
-        for (size_t j = 0; j < collision_groups[i].size(); j++) {
-          Body* body = collision_groups[i][j];
-          mass_sum += body->mass;
-          velocity_sum += body->velocity * body->mass;
-          position_sum += body->position * body->mass;
-          switch_camera = (camera.tracked_body->id == body->id || switch_camera);
-          // Get rid of this body; we won't need it anymore
-          delete body;
-        }
-        
-        // Construct a new body based on accumulated values
-        Body* new_body = new Body(position_sum / mass_sum,
-                                  mass_sum,
-                                  velocity_sum / mass_sum);
-        // If any of bodies in group had camera focus, switch focus to newly created body
-        if (switch_camera) {
-          camera.tracked_body = new_body;
-        }
-        // Finally, add our new body to new_bodies
-        new_bodies.push_back(new_body);
-        
-        std::cout << "Collision formed new body with id " << new_body->id << "\n";
+    for (size_t i = 0; i < collision_groups.size(); i++) {
+      Body* first = collision_groups[i].first;
+      Body* second = collision_groups[i].second;
+      
+      float new_mass = first->mass + second->mass;
+      sf::Vector2f new_pos = ((first->position * first->mass) + (second->position * second->mass)) / new_mass;
+      sf::Vector2f new_vel = ((first->velocity * first->mass) + (second->velocity * second->mass)) / new_mass;
+
+      Body* new_body = new Body(new_pos, new_mass, new_vel);
+      
+      if (camera.tracked_body == first || camera.tracked_body == second) {
+        camera.tracked_body = new_body;
       }
+
+      delete first;
+      delete second;
+
+      new_bodies.push_back(new_body);
     }
     
     // 'new_bodies' will become 'bodies' for next iteration, so reassign it
