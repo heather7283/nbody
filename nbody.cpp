@@ -1,7 +1,11 @@
 #include <SFML/Graphics.hpp>
+#include <SFML/Graphics/Color.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
 #include <random>
+#include <iostream>
 
 const float pi = std::acos(-1);
 const float G = 0.001;
@@ -23,10 +27,12 @@ public:
   float mass;
   sf::Vector2f position;
   sf::Vector2f velocity;
+
   bool is_collided = false;
+
   sf::CircleShape shape;
 
-  Body(sf::Vector2f position, float mass, sf::Vector2f velocity = sf::Vector2f(0, 0)) {
+  Body(sf::Vector2f position, float mass, sf::Vector2f velocity = sf::Vector2f(0, 0), sf::Color color = sf::Color::White) {
     this->id = ++highest_id;
     this->mass = mass;
     this->position = position;
@@ -36,6 +42,7 @@ public:
 
     this->shape = sf::CircleShape(this->radius);
     this->shape.setPosition(this->position);
+    this->shape.setFillColor(color);
   }
   
   void draw(sf::RenderWindow* window) {
@@ -127,6 +134,8 @@ void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, fl
   std::uniform_real_distribution<> rnd_r(min_range, max_range);
   std::uniform_real_distribution<> rnd_fi(0, pi * 2);
   std::uniform_real_distribution<> rnd_m(min_mass, max_mass);
+  std::uniform_real_distribution<> rnd_color(0, 16777215);
+
 
   Body* sun = new Body(sf::Vector2f(0, 0), sun_mass);
   bodies->push_back(sun);
@@ -144,7 +153,12 @@ void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, fl
     float vel_x =  std::sqrt(std::sin(fi) * G * sun->mass / r);
     float vel_y =  std::sqrt(std::cos(fi) * G * sun->mass / r);
 
-    Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), velocity);
+    uint32_t color = (uint32_t)rnd_color(gen);
+    color = color << 8;
+    color += 255;
+    std::cout << std::hex << color << "\n";
+
+    Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), velocity, sf::Color(color));
 
     bodies->push_back(body);
   }
@@ -231,7 +245,14 @@ int main() {
       sf::Vector2f new_pos = ((first->position * first->mass) + (second->position * second->mass)) / new_mass;
       sf::Vector2f new_vel = ((first->velocity * first->mass) + (second->velocity * second->mass)) / new_mass;
 
-      Body* new_body = new Body(new_pos, new_mass, new_vel);
+      sf::Color first_color = first->shape.getFillColor();
+      sf::Color second_color = second->shape.getFillColor();
+
+      sf::Color new_color = sf::Color((first_color.r * first->mass + second_color.r * second->mass) / new_mass,
+                                      (first_color.g * first->mass + second_color.g * second->mass) / 2,
+                                      (first_color.b * first->mass + second_color.b * second->mass) / 2);
+
+      Body* new_body = new Body(new_pos, new_mass, new_vel, new_color);
       
       if (camera.tracked_body == first || camera.tracked_body == second) {
         camera.tracked_body = new_body;
