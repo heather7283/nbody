@@ -1,11 +1,10 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System/Vector2.hpp>
-#include <algorithm>
 #include <cmath>
 #include <random>
 
 const float pi = std::acos(-1);
-
+const float G = 0.001;
 
 sf::Vector2f normalize(const sf::Vector2f& vector) {
   float length = std::sqrt(vector.x * vector.x + vector.y * vector.y);
@@ -53,9 +52,6 @@ public:
   }
 
   void do_gravity(Body* other) {
-    // Play with it to see what fits best
-    constexpr float G = .001;
-    
     float dx = this->position.x - other->position.x;
     float dy = this->position.y - other->position.y;
     float distance_squared = dx * dx + dy * dy;
@@ -124,13 +120,16 @@ void generate_random_bodies(int n, std::vector<Body*>* bodies) {
 }
 
 
-void complicated_random_bodies(int n, std::vector<Body*>* bodies, int min_range, int max_range, int min_mass, int max_mass, float speed) {
-  // Generate ring of bodies rotating clockwise
+void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, float min_range, float max_range, float min_mass, float max_mass) {
+  // Generate ring of bodies rotating clockwise around the sun
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> rnd_r(min_range, max_range);
   std::uniform_real_distribution<> rnd_fi(0, pi * 2);
   std::uniform_real_distribution<> rnd_m(min_mass, max_mass);
+
+  Body* sun = new Body(sf::Vector2f(0, 0), sun_mass);
+  bodies->push_back(sun);
   
   for (int i = 0; i < n; i++) {
     float r = rnd_r(gen);
@@ -138,11 +137,14 @@ void complicated_random_bodies(int n, std::vector<Body*>* bodies, int min_range,
     float x = std::cos(fi) * r;
     float y = std::sin(fi) * r * -1;
 
-    float r_percent = (r - min_range) / (max_range - min_range) + 0.5f;
-    float vel_x = std::sin(fi) * std::sqrt(speed * r_percent);
-    float vel_y = std::cos(fi) * std::sqrt(speed * r_percent);
+    sf::Vector2f velocity = normalize(sf::Vector2f(y * -1, x));
+    float velocity_mod = std::sqrt(G * sun->mass / r);
+    velocity *= velocity_mod;
 
-    Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), sf::Vector2f(vel_x, vel_y));
+    float vel_x =  std::sqrt(std::sin(fi) * G * sun->mass / r);
+    float vel_y =  std::sqrt(std::cos(fi) * G * sun->mass / r);
+
+    Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), velocity);
 
     bodies->push_back(body);
   }
@@ -161,8 +163,7 @@ int main() {
   // Array of bodies
   std::vector<Body*> bodies;
   
-  complicated_random_bodies(1000, &bodies, 100, 500, 1, 2, 0.01f);
-  bodies.push_back(new Body(sf::Vector2f(0, 0), 10000));
+  generate_solar_system(&bodies, 4000, 100000, 100, 500, 1, 1);
   //bodies = {
   //  new Body(sf::Vector2f(100, 100), 64),
   //  new Body(sf::Vector2f(200, 100), 64),
@@ -170,7 +171,7 @@ int main() {
   //  new Body(sf::Vector2f(200, 300), 64),
   //};
   
-  Camera camera(bodies[bodies.size() - 1]);
+  Camera camera(bodies[0]);
 
   std::vector<Body*> new_bodies;
   std::vector<std::pair<Body*, Body*>> collision_groups;
@@ -273,3 +274,4 @@ int main() {
 
   return 0;
 }
+
