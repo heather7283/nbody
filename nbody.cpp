@@ -1,6 +1,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/Color.hpp>
 #include <SFML/System/Vector2.hpp>
+#include <SFML/Window/Keyboard.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -93,6 +94,7 @@ unsigned int Body::highest_id = 0;
 class Camera {
 public:
   Body* tracked_body;
+  sf::Vector2f offset;
 
   Camera(Body* tracked_body) {
     this->tracked_body = tracked_body;
@@ -102,10 +104,10 @@ public:
     // If we change window size mid-operation coordinates will be messed up
     // so we precalculate window center coordinates
     sf::Vector2f window_center = sf::Vector2f(window.getSize().x / 2, window.getSize().y / 2);
-    sf::Vector2f offset = this->tracked_body->position;
+    sf::Vector2f tracked_body_offset = this->tracked_body->position;
 
     for (int i = 0; i < bodies_array.size(); i++) {
-      bodies_array[i]->position += window_center - offset;
+      bodies_array[i]->position += window_center - tracked_body_offset - this->offset;
     }
   }
 };
@@ -178,12 +180,6 @@ int main() {
   std::vector<Body*> bodies;
   
   generate_solar_system(&bodies, 4000, 100000, 100, 500, 1, 1);
-  //bodies = {
-  //  new Body(sf::Vector2f(100, 100), 64),
-  //  new Body(sf::Vector2f(200, 100), 64),
-  //  new Body(sf::Vector2f(100, 300), 64),
-  //  new Body(sf::Vector2f(200, 300), 64),
-  //};
   
   Camera camera(bodies[0]);
 
@@ -196,13 +192,70 @@ int main() {
     sf::Event event;
     while (window.pollEvent(event)) {
       switch (event.type) {
-        case sf::Event::Closed:
+        case sf::Event::Closed: {
           window.close();
-          break;
-        case sf::Event::Resized:
+        }
+        break;
+        case sf::Event::Resized: {
           sf::FloatRect visible_area(0.f, 0.f, event.size.width, event.size.height);
           window.setView(sf::View(visible_area));
-          break;
+        }
+        break;
+        case sf::Event::KeyPressed: {
+          switch (event.key.code) {
+            // Camera movement
+            case sf::Keyboard::H:
+              camera.offset.x -= 10;
+              break;
+            case sf::Keyboard::J:
+              camera.offset.y += 10;
+              break;
+            case sf::Keyboard::K:
+              camera.offset.y -= 10;
+              break;
+            case sf::Keyboard::L:
+              camera.offset.x += 10;
+              break;
+            // Reset camera
+            case sf::Keyboard::C:
+              camera.offset.x = 0;
+              camera.offset.y = 0;
+              break;
+            // Track next object
+            case sf::Keyboard::N: {
+              bool is_found = false;
+              for (int i = 0; i < bodies.size(); i++) {
+                if (bodies[i]->id > camera.tracked_body->id) {
+                  std::cout << camera.tracked_body->id << "\n";
+                  camera.tracked_body = bodies[i];
+                  is_found = true;
+                  break;
+                }
+              }
+              if (!is_found) {
+                camera.tracked_body = bodies[0];
+              }
+              break;
+            }
+            // Track previous object
+            case sf::Keyboard::P: {
+              bool is_found = false;
+              for (int i = bodies.size() - 1; i >= 0; i--) {
+                if (bodies[i]->id < camera.tracked_body->id) {
+                  std::cout << camera.tracked_body->id << "\n";
+                  camera.tracked_body = bodies[i];
+                  is_found = true;
+                  break;
+                }
+              }
+              if (!is_found) {
+                camera.tracked_body = bodies[bodies.size()];
+              }
+              break;
+            }
+          }
+        }
+        break;
       }
     }
     
