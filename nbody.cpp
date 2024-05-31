@@ -1,12 +1,17 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/Color.hpp>
+#include <SFML/Graphics/Font.hpp>
+#include <SFML/Graphics/Text.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <random>
+#include <format>
 #include <iostream>
+#include <random>
+#include <string>
 
 const float pi = std::acos(-1);
 const float G = 0.001;
@@ -113,6 +118,45 @@ public:
 };
 
 
+class UI {
+private:
+  sf::Font font;
+public:
+  std::vector<std::string> strings;
+  bool visible = true;
+
+  UI() {
+    if (!this->font.loadFromFile("/usr/share/fonts/TTF/JetBrainsMonoNLNerdFontMono-Regular.ttf")) {
+      std::cout << "Unable to load font" << "\n";
+      std::exit(1);
+    }
+  }
+
+  void clear() {
+    this->strings.clear();
+  }
+
+  void add_string(std::string string) {
+    this->strings.push_back(string);
+  }
+
+  void draw(sf::RenderWindow* window) {
+    std::string joined_string;
+    for (int i = 0; i < this->strings.size(); i++) {
+      joined_string += this->strings[i];
+      joined_string += "\n";
+    }
+    sf::Text text;
+    text.setFont(this->font);
+    text.setString(joined_string);
+    text.setCharacterSize(14);
+    text.setFillColor(sf::Color::White);
+
+    window->draw(text);
+  }
+};
+
+
 void generate_random_bodies(int n, std::vector<Body*>* bodies) {
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -158,7 +202,6 @@ void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, fl
     uint32_t color = (uint32_t)rnd_color(gen);
     color = color << 8;
     color += 255;
-    std::cout << std::hex << color << "\n";
 
     Body* body = new Body(sf::Vector2f(x, y), rnd_m(gen), velocity, sf::Color(color));
 
@@ -182,6 +225,7 @@ int main() {
   generate_solar_system(&bodies, 4000, 100000, 100, 500, 1, 1);
   
   Camera camera(bodies[0]);
+  UI ui;
 
   std::vector<Body*> new_bodies;
   std::vector<std::pair<Body*, Body*>> collision_groups;
@@ -226,7 +270,6 @@ int main() {
               bool is_found = false;
               for (int i = 0; i < bodies.size(); i++) {
                 if (bodies[i]->id > camera.tracked_body->id) {
-                  std::cout << camera.tracked_body->id << "\n";
                   camera.tracked_body = bodies[i];
                   is_found = true;
                   break;
@@ -242,7 +285,6 @@ int main() {
               bool is_found = false;
               for (int i = bodies.size() - 1; i >= 0; i--) {
                 if (bodies[i]->id < camera.tracked_body->id) {
-                  std::cout << camera.tracked_body->id << "\n";
                   camera.tracked_body = bodies[i];
                   is_found = true;
                   break;
@@ -253,12 +295,15 @@ int main() {
               }
               break;
             }
+            // Toggle UI
+            case sf::Keyboard::U:
+              ui.visible = !ui.visible;
           }
         }
         break;
       }
     }
-    
+
     new_bodies.clear();
     collision_groups.clear();
     
@@ -290,6 +335,7 @@ int main() {
       new_bodies.push_back(bodies.back());
     }
 
+    // Handle collisions
     for (size_t i = 0; i < collision_groups.size(); i++) {
       Body* first = collision_groups[i].first;
       Body* second = collision_groups[i].second;
@@ -302,8 +348,8 @@ int main() {
       sf::Color second_color = second->shape.getFillColor();
 
       sf::Color new_color = sf::Color((first_color.r * first->mass + second_color.r * second->mass) / new_mass,
-                                      (first_color.g * first->mass + second_color.g * second->mass) / 2,
-                                      (first_color.b * first->mass + second_color.b * second->mass) / 2);
+                                      (first_color.g * first->mass + second_color.g * second->mass) / new_mass,
+                                      (first_color.b * first->mass + second_color.b * second->mass) / new_mass);
 
       Body* new_body = new Body(new_pos, new_mass, new_vel, new_color);
       
@@ -335,6 +381,13 @@ int main() {
     for (Body *body : bodies) {
       body->draw(&window);
     }
+    // Draw the UI
+    ui.clear();
+    ui.add_string(std::format("Body count: {}", bodies.size()));
+    ui.add_string(std::format("Tracked body: {}", camera.tracked_body->id));
+    ui.add_string(std::format("Tracked body velocity: {}x {}y", camera.tracked_body->velocity.x, camera.tracked_body->velocity.y));
+    ui.add_string(std::format("Tracked body mass: {}", camera.tracked_body->mass));
+    ui.draw(&window);
     // Display the window
     window.display();
 
