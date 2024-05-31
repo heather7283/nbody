@@ -157,22 +157,6 @@ public:
 };
 
 
-void generate_random_bodies(int n, std::vector<Body*>* bodies) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_real_distribution<> rnd_coords(50.0, 750.0);
-  std::uniform_real_distribution<> rnd_masses(1.0, 8.0);
-  
-  for (int i = 0; i < n; i++) {
-    float x = rnd_coords(gen);
-    float y = rnd_coords(gen);
-    float mass = rnd_masses(gen);
-
-    bodies->push_back(new Body(sf::Vector2f(x, y), mass));
-  }
-}
-
-
 void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, float min_range, float max_range, float min_mass, float max_mass) {
   // Generate ring of bodies rotating clockwise around the sun
   std::random_device rd;
