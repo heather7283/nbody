@@ -1,4 +1,4 @@
-version = c++23
+version = c++20
 
 default: build run
 
@@ -9,7 +9,7 @@ run: build
 	nbody
 
 debug-build: nbody.cpp
-	g++ -std=$(version) -O0 -g -march=native -lsfml-graphics -lsfml-window -lsfml-system -o nbody nbody.cpp
+	g++ -std=$(version) -O0 -g -lsfml-graphics -lsfml-window -lsfml-system -o nbody nbody.cpp
 
 debug: debug-build
 	gdb -q nbody
