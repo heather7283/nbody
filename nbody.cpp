@@ -1,17 +1,9 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/Graphics/Font.hpp>
-#include <SFML/Graphics/Text.hpp>
-#include <SFML/System/Vector2.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <ctime>
 #include <format>
-#include <iostream>
 #include <random>
+#include <iostream>
 #include <string>
+#include <cmath>
 
 const float pi = std::acos(-1);
 const float G = 0.001;
@@ -79,15 +71,15 @@ public:
     other->velocity += direction * force / other->mass;
   }
 
+  void move() {
+    this->position += this->velocity;
+  }
+
   bool check_for_collision(Body* other) {
     if (get_distance_squared(other) <= ((this->radius + other->radius) * (this->radius + other->radius))) {
       return true;
     }
     return false;
-  }
-
-  void move() {
-    this->position += this->velocity;
   }
 
 private:
@@ -141,6 +133,8 @@ public:
   }
 
   void draw(sf::RenderWindow* window) {
+    if (!this->visible) return;
+
     std::string joined_string;
     for (int i = 0; i < this->strings.size(); i++) {
       joined_string += this->strings[i];
@@ -149,7 +143,7 @@ public:
     sf::Text text;
     text.setFont(this->font);
     text.setString(joined_string);
-    text.setCharacterSize(14);
+    text.setCharacterSize(16);
     text.setFillColor(sf::Color::White);
 
     window->draw(text);
@@ -180,8 +174,8 @@ void generate_solar_system(std::vector<Body*>* bodies, int n, float sun_mass, fl
     float velocity_mod = std::sqrt(G * sun->mass / r);
     velocity *= velocity_mod;
 
-    float vel_x =  std::sqrt(std::sin(fi) * G * sun->mass / r);
-    float vel_y =  std::sqrt(std::cos(fi) * G * sun->mass / r);
+    float vel_x =  std::sin(fi) * std::sqrt(G * sun->mass / r);
+    float vel_y =  std::cos(fi) * std::sqrt(G * sun->mass / r);
 
     uint32_t color = (uint32_t)rnd_color(gen);
     color = color << 8;
@@ -198,10 +192,11 @@ int main() {
   // Create a window
   sf::RenderWindow window(sf::VideoMode(800, 600), "nbody");
   sf::Clock clock;
+  sf::Time elapsed_time = sf::Time::Zero;
   
   // Calculate fps
   const float fps = 120.0f;
-  sf::Time spf = sf::seconds(1.0f / fps);
+  const sf::Time spf = sf::seconds(1.0f / fps);
 
   // Array of bodies
   std::vector<Body*> bodies;
@@ -365,18 +360,21 @@ int main() {
     for (Body *body : bodies) {
       body->draw(&window);
     }
+
     // Draw the UI
     ui.clear();
+    ui.add_string(std::format("Last frame took: {}ms ({} FPS)", elapsed_time.asSeconds(), 1 / elapsed_time.asSeconds()));
     ui.add_string(std::format("Body count: {}", bodies.size()));
     ui.add_string(std::format("Tracked body: {}", camera.tracked_body->id));
     ui.add_string(std::format("Tracked body velocity: {}x {}y", camera.tracked_body->velocity.x, camera.tracked_body->velocity.y));
     ui.add_string(std::format("Tracked body mass: {}", camera.tracked_body->mass));
     ui.draw(&window);
+
     // Display the window
     window.display();
 
     // Consistent framerate
-    sf::Time elapsed_time = clock.restart();
+    elapsed_time = clock.restart();
     sf::Time time_to_wait = spf - elapsed_time;
     if (time_to_wait > sf::Time::Zero) {
       sf::sleep(time_to_wait);
